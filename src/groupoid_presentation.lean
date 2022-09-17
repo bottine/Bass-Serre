@@ -74,6 +74,7 @@ structure subgroupoid :=
   (mul' : ∀ {c d e} {p} (hp : p ∈ arrws c d) {q} (hq : q ∈ arrws d e), 
             p ≫ q ∈ arrws c e)
 
+--instance: has_coe_to_fun (subgroupoid G) (λ S, Π (c d : C), set (G.hom c d)) := ⟨λ S, S.arrws⟩
 
 variable {G}
 
@@ -107,7 +108,7 @@ def le_top (S : subgroupoid G) : S ≤ ⊤  :=
 begin
   dsimp only [has_top.top], 
   rintros c d,
-  simp only [subset_univ], 
+  simp [subset_univ], 
 end
 
 def bot_le (S : subgroupoid G) : ⊥   ≤ S :=
@@ -150,6 +151,38 @@ instance : complete_lattice (subgroupoid G) :=
   inf_le_left  := sorry,
   inf_le_right := sorry,
   .. complete_lattice_of_Inf (subgroupoid G) sorry }
+
+def discrete [decidable_eq C] : subgroupoid G := 
+⟨ λ c d, if h : d = c then { ( (by {rw h, exact G.id c,}) : c ⟶ d )} else ∅
+, by 
+  { rintro c d, 
+    by_cases h : d = c, 
+    { subst_vars, 
+      rintro p hp, 
+      simp only [eq_self_iff_true, congr_arg_mpr_hom_right, eq_to_hom_refl, category.comp_id, dite_eq_ite, if_true, mem_singleton_iff] at hp ⊢, 
+      rw hp, apply inv_one, },
+    { rintros p hp, simp only [eq_mpr_eq_cast] at ⊢ hp, rw dif_neg (λ l : c = d, h l.symm), rw dif_neg h at hp, finish, }}
+, by 
+  {sorry}⟩
+
+-- TODO: preimage of a normal is normal: kernel is preimage of discrete.
+
+def is_normal (S : subgroupoid G) : Prop :=
+  (∀ c, (𝟙 c) ∈ (S.arrws c c)) ∧  -- S is "wide": all vertices of G are covered
+  (∀ {c d} (p : c ⟶ d) (γ : c ⟶ c) (hs : γ ∈ S.arrws c c), ((G.inv p) ≫ γ ≫ p) ∈ (S.arrws d d))
+
+def is_normal.conjugation_eq (S : subgroupoid G) {c d} (p : c ⟶ d) : function.bijective (λ γ : c ⟶ c, (G.inv p) ≫ γ ≫ p) := sorry  
+
+lemma is_normal.Inf (s : set $ subgroupoid G) (sn : ∀ S ∈ s, is_normal S) : is_normal (Inf s) := 
+begin
+  split,
+  { rintro c, dsimp only [Inf], rintro _ ⟨⟨S,Ss⟩,rfl⟩, exact (sn S Ss).left c,},
+  { rintros c d p γ hγ, dsimp only [Inf], rintro _ ⟨⟨S,Ss⟩,rfl⟩, apply (sn S Ss).right p γ, apply hγ, use ⟨S,Ss⟩,}
+end 
+
+/- Following Higgins -/
+def is_strict_normal (S : subgroupoid G) : Prop := (is_normal S) ∧ (∀ (c d : C), c ≠ d →  (S.arrws c d) = ∅)
+
 
 
 variable (X : ∀ c d : C, set (G.hom c d))
@@ -267,17 +300,26 @@ end
 
 def generated_on [decidable_eq C] (D : set C) : subgroupoid G := generated (λ c d, (X c d) ∪ (if h : c = d then by { rw h, exact {𝟙 d} } else ∅))
 
-/- Following Higgins -/
-def is_normal (S : subgroupoid G) := 
-  (∀ (c d : C), (S.arrws c d) = ∅) ∧ 
-  (∀ c, (𝟙 c) ∈ (S.arrws c c)) ∧ 
-  (∀ {c d} (p : c ⟶ d) (γ : c ⟶ c) (hs : γ ∈ S.arrws c c), ((G.inv p) ≫ γ ≫ p) ∈ (S.arrws d d))
+
+
+
 
 end subgroupoid
 
+
+
 section strict_hom
+/--
+Higgins has his own version of normality and morphisms,  
+where normality has a condition that all arrows between distinct vertices disappear, 
+but I'm not sure this is the right way to look at it. 
+We'll do it here, and try for a more general approach afterwards (where we don't have this added condition on normal subgroupoids, _and_ morphisms can play with vertices)
+-/
+
 
 variables {C} (G H : groupoid C) 
+
+
 
 /- Following “Presentations of groupoids” by Higgins, p. 9, we call `strict_hom` the functors on underlying category being the identity on objects -/
 structure strict_hom := 
@@ -288,13 +330,15 @@ structure strict_hom :=
 
 infixr ` →** `:25 := strict_hom
 
-def im (φ : G →** H) : subgroupoid H := 
+def strict_im (φ : G →** H) : subgroupoid H := 
 ⟨ λ c d, {p : H.hom c d | ∃ q : G.hom c d, p = φ.f q}
 , by {rintros c d _ ⟨q,rfl⟩, rw ← φ.inv, simp only [mem_set_of_eq, exists_apply_eq_apply'],}
 , by {rintros c d e _ ⟨p,rfl⟩ _ ⟨q,rfl⟩, rw ← φ.mul, simp only [mem_set_of_eq, exists_apply_eq_apply'],}⟩ 
 
 
-def ker [decidable_eq C] (φ : G →** H) : subgroupoid G := 
+variables {G H}
+
+def strict_ker [decidable_eq C] (φ : G →** H) : subgroupoid G := 
 ⟨ λ c d, if h : c = d then eq.rec_on h {f : c ⟶ c | φ.f f = 𝟙 c} else ∅
 , by 
   { rintros c d p hp, 
@@ -311,8 +355,25 @@ def ker [decidable_eq C] (φ : G →** H) : subgroupoid G :=
 ⟩
 
 
+lemma normal_iff [decidable_eq C] (S : subgroupoid G) : is_strict_normal G S ↔ ∃ (H : groupoid C) (φ : G →** H), S = strict_ker φ := sorry
+
 
 end strict_hom
+
+variable (D : Type*)
+variables {G : groupoid C} {H : groupoid D}
+
+section hom
+
+def ker (φ : @category_theory.functor C G.to_category D H.to_category) : groupoid C :=
+begin
+  constructor,
+  -- not what I want!
+  sorry
+end
+
+end hom
+
 
 
 end groupoid
