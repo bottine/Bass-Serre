@@ -5,6 +5,7 @@ import algebra.group.defs
 import algebra.hom.group
 import algebra.hom.equiv 
 import data.set.lattice
+import combinatorics.quiver.connected_component
 
 /-
 path_category == the free category of pats
@@ -15,13 +16,12 @@ algebra.hom.equiv to use ≃*
 open set
 
 namespace category_theory
-namespace groupoid
 
 universes u v 
 
 variables {C : Type u} 
 
-instance group_at [groupoid C] (c : C): group (c ⟶ c) :=
+instance groupoid.vertex_group [groupoid C] (c : C): group (c ⟶ c) :=
 { mul := λ (x y : c ⟶ c), x ≫ y
 , mul_assoc := category.assoc --λ (x y z : c ⟶ c), by simp only [category.assoc]
 , one := 𝟙 c
@@ -30,37 +30,37 @@ instance group_at [groupoid C] (c : C): group (c ⟶ c) :=
 , inv := groupoid.inv
 , mul_left_inv := groupoid.inv_comp }
 
-def group_at_hom [groupoid C] {c d : C} (f : c ⟶ d) : 
+@[simp] lemma groupoid.vertex_group.mul_eq_comp [groupoid C] (c : C) (γ δ : c ⟶ c) : γ * δ = γ ≫ δ := rfl
+
+def groupoid.vertex_group_isom_of_map [groupoid C] {c d : C} (f : c ⟶ d) : 
   (c ⟶ c) ≃* (d ⟶ d) := 
 begin
-  fsplit,
-  exact λ γ, (groupoid.inv f) ≫ γ ≫ f,
-  exact λ δ, f ≫ δ ≫ (groupoid.inv f),
-  dsimp only [function.left_inverse], rintro x,
-  simp only [category.assoc, groupoid.comp_inv, category.comp_id],
-  rw [←category.assoc,groupoid.comp_inv,category.id_comp],
-  dsimp only [function.right_inverse,function.left_inverse], rintro x,
-  simp only [category.assoc, groupoid.comp_inv, 
-             groupoid.inv_comp, category.comp_id],
-  rw [←category.assoc,groupoid.inv_comp,category.id_comp],
-  rintro x y,
-  dsimp [has_mul.mul,mul_one_class.mul,monoid.mul,div_inv_monoid.mul,group.mul],
-  have : x ≫ y = x ≫ f ≫ (groupoid.inv f) ≫ y, by 
-  { congr, rw [←category.assoc,groupoid.comp_inv,category.id_comp], },
-  rw this, 
-  simp only [category.assoc],
+  refine_struct ⟨λ γ, (groupoid.inv f) ≫ γ ≫ f, λ δ, f ≫ δ ≫ (groupoid.inv f), _, _, _⟩,
+  { rintro x,
+    simp_rw [category.assoc, groupoid.comp_inv, category.comp_id,←category.assoc, groupoid.comp_inv, category.id_comp], },
+  { rintro x,
+    simp_rw [category.assoc, groupoid.inv_comp, ←category.assoc, groupoid.inv_comp,category.id_comp, category.comp_id], },
+  { rintro x y,
+    have : x ≫ y = x ≫ f ≫ (groupoid.inv f) ≫ y, by 
+    { congr, rw [←category.assoc,groupoid.comp_inv,category.id_comp], },
+    simp [this,groupoid.vertex_group.mul_eq_comp,category.assoc], },
 end
 
 
-def group_at_reachable [groupoid C] (c d : C)  (p : quiver.path c d) : (c ⟶ c) ≃* (d ⟶ d) :=
+def groupoid.vertex_group_isom_of_path [groupoid C] (c d : C)  (p : quiver.path c d) : (c ⟶ c) ≃* (d ⟶ d) :=
 begin
   induction p,
   { reflexivity },
-  { apply p_ih.trans,  apply groupoid.group_at_hom, assumption, }
+  { apply p_ih.trans,  apply groupoid.vertex_group_isom_of_map, assumption, }
 end
 
 
+section
+open quiver
+instance [G : groupoid C] : has_reverse C := ⟨λ a b, G.inv⟩
+end
 
+namespace groupoid
 
 section subgroupoid
 
@@ -78,7 +78,27 @@ structure subgroupoid :=
 
 variable {G}
 
+lemma subgroupoid.nonempty_isotropy_to_mem_id (S :subgroupoid G) (c : C) : 
+  (S.arrws c c).nonempty → 𝟙 c ∈ S.arrws c c :=
+begin
+  rintro ⟨γ,hγ⟩,
+  have : 𝟙 c = γ * (G.inv γ), by simp only [vertex_group.mul_eq_comp, comp_inv],
+  rw this, apply S.mul', exact hγ, apply S.inv', exact hγ,
+end
+
 def subgroupoid.carrier (S :subgroupoid G) : set C := {c : C | (S.arrws c c).nonempty }
+
+def subgroupoid.coe_quiver (S : subgroupoid G) : quiver (S.carrier) := ⟨λ a b, S.arrws a b⟩
+
+def subgroupoid.coe_category_struct  (S : subgroupoid G) : category_struct (S.carrier) :=
+begin
+  haveI := S.coe_quiver,
+  constructor,
+  { rintro ⟨a,ha⟩, sorry,},
+  { rintro ⟨a,ha⟩ ⟨b,hb⟩ ⟨c,hc⟩ p q, sorry }
+end
+
+-- this is probably not going anywhere…
 
 def is_subgroupoid (S T : subgroupoid G) : Prop :=
   ∀ {c d}, S.arrws c d ⊆ T.arrws c d
@@ -153,19 +173,28 @@ instance : complete_lattice (subgroupoid G) :=
   .. complete_lattice_of_Inf (subgroupoid G) sorry }
 
 def discrete [decidable_eq C] : subgroupoid G := 
-⟨ λ c d, if h : d = c then { ( (by {rw h, exact G.id c,}) : c ⟶ d )} else ∅
+⟨ λ c d, if h : c = d then {h.rec_on (G.id c)} else ∅
 , by 
-  { rintro c d, 
+  { rintros c d p hp, 
     by_cases h : d = c, 
     { subst_vars, 
-      rintro p hp, 
       simp only [eq_self_iff_true, congr_arg_mpr_hom_right, eq_to_hom_refl, category.comp_id, dite_eq_ite, if_true, mem_singleton_iff] at hp ⊢, 
       rw hp, apply inv_one, },
-    { rintros p hp, simp only [eq_mpr_eq_cast] at ⊢ hp, rw dif_neg (λ l : c = d, h l.symm), rw dif_neg h at hp, finish, }}
+    { rw dif_neg (λ l : c = d, h l.symm) at hp, exact hp.elim, }, }
 , by 
-  {sorry}⟩
+  { rintros c d e p hp q hq,
+    by_cases h : d = c,
+    { by_cases k : e = d; subst_vars,
+      { simp only [eq_self_iff_true, dite_eq_ite, if_true, mem_singleton_iff] at ⊢ hp hq,
+        rw [hp, hq], simp only [category.comp_id], }, 
+      { simp only [eq_self_iff_true, dite_eq_ite, if_true, mem_singleton_iff] at ⊢ hp hq,
+        rw dif_neg (λ l : d = e, k l.symm) at hq, exact hq.elim, }, },
+    { rw dif_neg (λ l : c = d, h l.symm) at hp, exact hp.elim, }
+  }⟩
 
--- TODO: preimage of a normal is normal: kernel is preimage of discrete.
+
+
+
 
 def is_normal (S : subgroupoid G) : Prop :=
   (∀ c, (𝟙 c) ∈ (S.arrws c c)) ∧  -- S is "wide": all vertices of G are covered
@@ -179,6 +208,7 @@ begin
   { rintro c, dsimp only [Inf], rintro _ ⟨⟨S,Ss⟩,rfl⟩, exact (sn S Ss).left c,},
   { rintros c d p γ hγ, dsimp only [Inf], rintro _ ⟨⟨S,Ss⟩,rfl⟩, apply (sn S Ss).right p γ, apply hγ, use ⟨S,Ss⟩,}
 end 
+
 
 /- Following Higgins -/
 def is_strict_normal (S : subgroupoid G) : Prop := (is_normal S) ∧ (∀ (c d : C), c ≠ d →  (S.arrws c d) = ∅)
@@ -301,11 +331,7 @@ end
 def generated_on [decidable_eq C] (D : set C) : subgroupoid G := generated (λ c d, (X c d) ∪ (if h : c = d then by { rw h, exact {𝟙 d} } else ∅))
 
 
-
-
-
 end subgroupoid
-
 
 
 section strict_hom
@@ -355,25 +381,72 @@ def strict_ker [decidable_eq C] (φ : G →** H) : subgroupoid G :=
 ⟩
 
 
-lemma normal_iff [decidable_eq C] (S : subgroupoid G) : is_strict_normal G S ↔ ∃ (H : groupoid C) (φ : G →** H), S = strict_ker φ := sorry
+--lemma normal_iff [decidable_eq C] (S : subgroupoid G) : is_strict_normal G S ↔ ∃ (H : groupoid C) (φ : G →** H), S = strict_ker φ := sorry
 
 
 end strict_hom
 
-variable (D : Type*)
-variables {G : groupoid C} {H : groupoid D}
 
 section hom
 
-def ker (φ : @category_theory.functor C G.to_category D H.to_category) : groupoid C :=
+variables (C) (D : Type*)
+variables [G : groupoid C] [H : groupoid D]
+variable [decidable_eq D]
+
+def hom := @category_theory.functor C G.to_category D H.to_category
+local infix `⥤i`:50 := hom
+
+@[simp]
+lemma functor.map_inv (φ : C ⥤i D) {c d : C} (f : c ⟶ d) :  
+  φ.map (G.inv f) = H.inv (φ.map f) := 
+calc φ.map (G.inv f) = (φ.map $ G.inv f) ≫ (𝟙 $ φ.obj c) : by rw [category.comp_id]
+                 ... = (φ.map $ G.inv f) ≫ ((φ.map f) ≫ (H.inv $ φ.map f)) : by rw [comp_inv]
+                 ... = ((φ.map $ G.inv f) ≫ (φ.map f)) ≫ (H.inv $ φ.map f) : by rw [category.assoc]
+                 ... = (φ.map $ G.inv f ≫ f) ≫ (H.inv $ φ.map f) : by rw [functor.map_comp']
+                 ... = (H.inv $ φ.map f) : by rw [inv_comp,functor.map_id,category.id_comp]            
+
+
+
+def subgroupoid.comap (φ : C ⥤i D) (S : subgroupoid H) : subgroupoid G :=
+⟨ λ c d, {f : c ⟶ d | φ.map f ∈ S.arrws (φ.obj c) (φ.obj d)}
+, by 
+  { rintros, simp only [mem_set_of_eq], rw functor.map_inv, apply S.inv', assumption, }
+, by
+  { rintros, simp only [mem_set_of_eq, functor.map_comp], apply S.mul'; assumption, }⟩
+
+lemma is_normal.preimage [G: groupoid C] (φ : C ⥤i D) {S : subgroupoid H} (Sn : is_normal S) : is_normal (subgroupoid.comap C D φ S) :=
 begin
-  constructor,
-  -- not what I want!
-  sorry
+  dsimp only [is_normal,subgroupoid.comap,is_normal],
+  split,
+  { rintro c, simp only [mem_set_of_eq, functor.map_id], apply Sn.left, },
+  { rintros c d f γ hγ, simp only [mem_set_of_eq, functor.map_comp, functor.map_inv], apply Sn.right, exact hγ, },
+end
+
+def ker [G : groupoid C] [H : groupoid D] (φ : C ⥤i D) : subgroupoid G := subgroupoid.comap C D φ (discrete) 
+
+def mem_ker_iff  [G : groupoid C] [H : groupoid D] (φ : C ⥤i D) {c d : C} (f : c ⟶ d) : 
+  f ∈ (ker C D φ).arrws c d ↔ ∃ (h : φ.obj c = φ.obj d), φ.map f = h.rec_on (𝟙 $ φ.obj c) :=
+begin
+  dsimp only [ker, discrete,subgroupoid.comap], 
+  by_cases h : φ.obj c = φ.obj d,
+  { simp only [dif_pos h, mem_singleton_iff, mem_set_of_eq], 
+    split,
+    { rintro e, use h, exact e, },
+    { rintro ⟨_,e⟩, exact e, }},
+  { simp only [dif_neg h, mem_empty_eq, set_of_false, false_iff, not_exists], 
+    rintro e, exact (h e).elim, },
 end
 
 end hom
 
+
+section quotient
+
+--def quotient_vertex  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Type* :=
+
+--def quotient [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) := groupoid (category_theory.quiver.weakly_connected_component C )
+
+end quotient
 
 
 end groupoid
