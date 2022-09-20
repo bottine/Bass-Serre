@@ -15,6 +15,9 @@ algebra.hom.equiv to use ≃*
 -/
 
 open set
+open classical function
+local attribute [instance] prop_decidable
+
 
 namespace category_theory
 
@@ -273,6 +276,18 @@ begin
     { exact z ≫ y.val,},
     { exact z ≫ (G.inv y.val), }, },
 end
+
+--def word'.append : Π {c d e : C}, word' X c d → word' X d e → word' X c e := λ c d e u w, u.comp w
+#print quiver.path.cons
+def path.in : Π {c d : C} (p : quiver.path c d) (X : ∀ c d : C, set (G.hom c d)), Prop :=
+begin
+  rintro c d p X,
+  induction p with one two three four,
+  { exact true },
+  { exact p_ih ∧ four ∈ X one two },
+end
+
+
 
 inductive word  (X : ∀ c d : C, set (G.hom c d)) : C → C → Sort*
 | nil {c : C} : word c c
@@ -599,7 +614,11 @@ begin
     simp only [category.id_comp, comp_inv], }
 end
 
+def quotient_id  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
+λ c, ⟨ quot_id' S Sn c, by {dsimp only [quot_id',quot_start,quot_end,quot_v.mk], induction c, simp, simp,}⟩
+
 def quot_id''  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
+
 begin
   refine λ c, c.rec_on _ _, 
   { rintro c, dsimp only [quotient_quiver,quot_start,quot_end,quot_v.mk], 
@@ -608,18 +627,9 @@ begin
     simp,
     have : quot.mk (λ (c d : C), (S.arrws c d).nonempty) c = quot.mk (λ (c d : C), (S.arrws c d).nonempty) d, by 
     { apply quot.sound, constructor, use fS,},
-    simp, sorry
+    simp [this],    sorry
     }
 end
-
-def quotient_id  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
-λ c, ⟨ quot_id' S Sn c, by {dsimp only [quot_id',quot_start,quot_end,quot_v.mk], induction c, simp, simp,}⟩
-
-def quot_comp'  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c d e : quot_v S Sn), (c ⟶ d) → (d ⟶ e) → (quot $ conj S Sn) :=
-begin
-  sorry
-end
-
 
 def quotient [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : 
   groupoid (quot (λ (c d : C), (S.arrws c d).nonempty)) :=
