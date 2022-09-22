@@ -627,7 +627,6 @@ begin
     simp,
     have : quot.mk (λ (c d : C), (S.arrws c d).nonempty) c = quot.mk (λ (c d : C), (S.arrws c d).nonempty) d, by 
     { apply quot.sound, constructor, use fS,},
-    simp [this],    sorry
     }
 end
 
