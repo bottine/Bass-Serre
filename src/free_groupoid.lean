@@ -165,28 +165,45 @@ quot.lift_on p
   (λ pp, quot.mk (@red_step V (_inst_1) d c) pp.reverse)
   (λ p₀ p₁ redp , quot.sound $ by {simp only [red_step.reverse], exact redp })
 
-lemma quot_inv_comp {c d : free_groupoid V} (p : c ⟶ d)  : quot_comp p (quot_inv p) = 𝟙 c :=
+lemma quot_inv_inv {c d : free_groupoid V} (p : c ⟶ d) : (quot_inv $ quot_inv p) = p :=
 begin
   apply quot.induction_on p,
   rintro pp,
-  dsimp only [quot_comp, quot_inv],
-  simp only [quot.lift_on_mk], 
-  apply quot.eqv_gen_sound,
-  induction pp with _ c d e f w ih eig nin ten,
-  { exact eqv_gen.refl _, },
-  { sorry, --refine eqv_gen.trans _ _ _ _ _,
-     },
-  sorry,
+  apply quot.eqv_gen_sound, 
+  simp only [word.reverse_reverse],
+  exact eqv_gen.refl _,
 end
 
 lemma quot_comp_inv {c d : free_groupoid V} (p : c ⟶ d)  : (quot_inv p) ≫ p = 𝟙 d :=
 begin
   apply quot.induction_on p,
-  rintro,
+  rintro pp,
   dsimp only [quot_comp, quot_inv], 
   simp only [quot.lift_on_mk], 
   apply quot.eqv_gen_sound,
-  sorry,
+  induction pp with _ c d e f w ih c d e f w ih,
+  { exact eqv_gen.refl _ },
+  { refine eqv_gen.trans _ (w.reverse ≫* w) _ _ _, 
+    { apply eqv_gen.rel,  
+      right,
+      use [d,c,w.reverse,w,f], 
+      unfold letter_p, 
+      simp only [word.reverse_cons_p, word.append_assoc, word.cons_p_append, word.nil_append, eq_self_iff_true, and_self], }, 
+    { apply ih (quot.mk _ w) }, },
+  { refine eqv_gen.trans _ (w.reverse ≫* w) _ _ _, 
+    { apply eqv_gen.rel,  
+      left,
+      use [d,c,w.reverse,w,f], 
+      unfold letter_n, 
+      simp only [word.append_assoc, word.nil_append, eq_self_iff_true, word.reverse_cons_n, and_true, word.cons_n_append], }, 
+    { apply ih (quot.mk _ w) }, },
+
+end
+
+lemma quot_inv_comp {c d : free_groupoid V} (p : c ⟶ d)  : quot_comp p (quot_inv p) = 𝟙 c :=
+begin
+  nth_rewrite 0 ←quot_inv_inv p,
+  apply quot_comp_inv,
 end
 
 instance : groupoid (free_groupoid V) :=
