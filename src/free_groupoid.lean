@@ -1,11 +1,5 @@
-import category_theory.path_category
 import category_theory.quotient
 import category_theory.groupoid
-import algebra.group.defs
-import algebra.hom.group
-import algebra.hom.equiv 
-import data.set.lattice
-import combinatorics.quiver.connected_component
 import group_theory.subgroup.basic
 
 
@@ -38,9 +32,6 @@ def letter_p {c d : V} (p : c ⟶ d) : word c d := (word.cons_p p word.nil)
 @[pattern]
 def letter_n {c d : V} (p : c ⟶ d) : word d c := (word.cons_n p word.nil)
 
-notation ` +[ ` p ` ] ` := letter_p p
-notation ` -[ ` p ` ] ` := letter_n p
-
 def word.append  : Π {c d e : V}, word c d → word d e → word c e
 | _ _ _ (word.nil) w := w
 | _ _ _ (word.cons_p p u) w := word.cons_p p (u.append w)
@@ -48,8 +39,15 @@ def word.append  : Π {c d e : V}, word c d → word d e → word c e
 
 
 @[simp] lemma word.nil_append {c d : V} {p : word c d} : word.nil.append p = p := rfl
+
 @[simp] lemma word.append_nil {c d : V} {p : word c d} : p.append word.nil = p := by 
 { induction p, refl, all_goals { dsimp only [word.append], rw p_ih, }, }
+
+@[simp] lemma word.cons_p_append {c d e b : V} (f : c ⟶ d) (u : word d e) (w : word e b) : 
+  (word.cons_p f u).append w = word.cons_p f (u.append w) := rfl
+
+@[simp] lemma word.cons_n_append {c d e b : V} (f : d ⟶ c) (u : word d e) (w : word e b) : 
+  (word.cons_n f u).append w = word.cons_n f (u.append w) := rfl
 
 @[simp] lemma word.append_assoc {c d e f : V} {p : word c d} {q : word d e} {r : word e f} : 
   (p.append q).append r = p.append (q.append r) := by
@@ -62,9 +60,12 @@ def word.reverse : Π {c d : V}, word c d → word d c
 | _ _ (word.cons_p p u) := (u.reverse.append (letter_n p))
 | _ _ (word.cons_n p u) := (u.reverse.append (letter_p p))
 
-lemma word.reverse_letter_p {c d : V} (p : c ⟶ d) : (letter_p p).reverse = letter_n p := by 
+@[simp] def word.reverse_nil (c : V) : (word.nil : word c c).reverse = word.nil := rfl 
+
+@[simp] lemma word.reverse_letter_p {c d : V} (p : c ⟶ d) : (letter_p p).reverse = letter_n p := by 
 { dsimp only [letter_p, letter_n, word.reverse], simp, }
-lemma word.reverse_letter_n {c d : V} (p : d ⟶ c) : (letter_n p).reverse = letter_p p := by
+
+@[simp] lemma word.reverse_letter_n {c d : V} (p : d ⟶ c) : (letter_n p).reverse = letter_p p := by
 { dsimp only [letter_p, letter_n, word.reverse], simp, }
 
 @[simp] lemma word.reverse_cons_p {c d e : V} (p : c ⟶ d) (w : word d e) : 
@@ -73,12 +74,25 @@ lemma word.reverse_letter_n {c d : V} (p : d ⟶ c) : (letter_n p).reverse = let
 @[simp] lemma word.reverse_cons_n {c d e : V} (p : d ⟶ c) (w : word d e) : 
   (word.cons_n p w).reverse =  w.reverse.append (letter_p p) := rfl
 
+@[simp] lemma word.reverse_append {c d e : V} (u : word c d) (w : word d e) : 
+  (u.append w).reverse =  w.reverse.append (u.reverse) := by 
+{ induction u, 
+  { simp only [word.nil_append, word.reverse_nil, word.append_nil], },
+  { unfold word.append, -- should that be made into a lemma word.cons_p_append ?
+    simp only [u_ih, word.reverse_cons_p, word.append_assoc], },
+  { unfold word.append,
+    simp only [u_ih, word.reverse_cons_n, word.append_assoc], }, }
+
+
 @[simp] lemma word.reverse_reverse  {c d : V} (w : word c d) : w.reverse.reverse = w := by
-{ induction w, dsimp only [word.reverse], refl, sorry, sorry}
+{ induction w, 
+  { dsimp only [word.reverse], refl, },
+  { simp only [w_ih, word.reverse_cons_p, word.reverse_append, word.reverse_letter_n], refl, },
+  { simp only [w_ih, word.reverse_cons_n, word.reverse_append, word.reverse_letter_p], refl, }, }
  
-def red_step {c d : V} (p : word c d) (q : word c d) : Prop :=
-  (∃ (a b : V) (q₀ : word c a) (q₁ : word a d) (f : a ⟶ b), p = q₀ ≫* +[ f ] ≫* -[ f ] ≫* q₁ ∧ q = q₀ ≫* q₁)
-∨ (∃ (a b : V) (q₀ : word c a) (q₁ : word a d) (f : b ⟶ a), p = q₀ ≫* -[ f ] ≫* +[ f ] ≫* q₁ ∧ q = q₀ ≫* q₁)
+def red_step {c  d : V} (p : word c d) (q : word c d) : Prop :=
+  (∃ (a b : V) (q₀ : word c a) (q₁ : word a d) (f : a ⟶ b), p = q₀ ≫*  (letter_p f) ≫* (letter_n f) ≫* q₁ ∧ q = q₀ ≫* q₁)
+∨ (∃ (a b : V) (q₀ : word c a) (q₁ : word a d) (f : b ⟶ a), p = q₀ ≫* (letter_n f) ≫* (letter_p f) ≫* q₁ ∧ q = q₀ ≫* q₁)
 
 @[simp]
 lemma red_step.reverse {c d : V} (p₀ p₁ : word c d) : red_step p₀.reverse p₁.reverse ↔ red_step p₀ p₁ :=
@@ -88,20 +102,31 @@ begin
     rintro h,
     rw  [←word.reverse_reverse p₀, ←word.reverse_reverse p₁],
     exact this d c _ _ h, },
-  sorry
+  rintro c d p₀ p₁ (⟨u,v,r₀,r₁,f,rfl,rfl⟩|⟨u,v,r₀,r₁,f,rfl,rfl⟩),
+  { left, use [u,v,r₁.reverse,r₀.reverse,f], simp, },
+  { right, use [u,v,r₁.reverse,r₀.reverse,f], simp, },
 end
 
 @[simp]
-lemma red_step.append_left_congr  {c d e : V} {p₀ p₁ : word c d} {q : word d e} : red_step p₀ p₁ → red_step (p₀ ≫* q) (p₁ ≫* q) :=
-begin sorry end
+lemma red_step.append_left_congr  {c d e : V} {p₀ p₁ : word c d} {q : word d e} : 
+  red_step p₀ p₁ → red_step (p₀ ≫* q) (p₁ ≫* q) :=
+begin 
+  rintro (⟨u,v,r₀,r₁,f,rfl,rfl⟩|⟨u,v,r₀,r₁,f,rfl,rfl⟩),
+  { left, use [u,v,r₀,r₁.append q,f],simp, },
+  { right, use [u,v,r₀,r₁.append q,f],simp, },
+end
 
 @[simp]
-lemma red_step.append_right_congr  {c d e : V} {p : word c d} {q₀ q₁ : word d e} :  red_step q₀ q₁ → red_step (p ≫* q₀) (p ≫* q₁) :=
-begin sorry end
+lemma red_step.append_right_congr  {c d e : V} {p : word c d} {q₀ q₁ : word d e} :  
+  red_step q₀ q₁ → red_step (p ≫* q₀) (p ≫* q₁) :=
+begin 
+  rintro (⟨u,v,r₀,r₁,f,rfl,rfl⟩|⟨u,v,r₀,r₁,f,rfl,rfl⟩),
+  { left, use [u,v,p.append r₀,r₁,f],simp, },
+  { right, use [u,v,p.append r₀,r₁,f],simp, },
+end
 
 def free_groupoid (V : Type u) [Q : quiver.{v+1} V] := V
 instance free_groupoid_quiver : quiver (free_groupoid V) := { hom := λ c d, quot (@red_step V _ c d) }
-
 
 def quot_comp { c d e : free_groupoid V} (p : c ⟶ d) (q : d ⟶ e) : c ⟶ e :=
 quot.lift_on 
@@ -118,7 +143,6 @@ instance free_groupoid_category_struct : category_struct (free_groupoid V)  :=
 , id := quot_id
 , comp := λ a b c p q, quot_comp p q }
 
-
 lemma id_quot_comp { c d : free_groupoid V} (p : c ⟶ d) : quot_comp (𝟙 c) p = p :=
 quot.induction_on p $ λ pp, quot.eqv_gen_sound $ eqv_gen.refl pp
 
@@ -130,20 +154,16 @@ lemma quot_comp_assoc { c d e f : free_groupoid V}
   quot_comp (quot_comp p q) r = quot_comp p (quot_comp q r) :=
 quot.induction_on₃ p q r $ λ pp qq rr, by {dsimp [quot_comp], simp,}
 
-
-
 instance free_groupoid_category : category (free_groupoid V)  := 
 { to_category_struct := free.free_groupoid_category_struct
   , id_comp' := λ a b p, id_quot_comp p
   , comp_id' := λ a b p, quot_comp_id p
   , assoc' := λ a b c d p q r, quot_comp_assoc p q r }
 
-
 def quot_inv {c d : free_groupoid V} (p : c ⟶ d) : d  ⟶ c :=
 quot.lift_on p
   (λ pp, quot.mk (@red_step V (_inst_1) d c) pp.reverse)
   (λ p₀ p₁ redp , quot.sound $ by {simp only [red_step.reverse], exact redp })
-
 
 lemma quot_inv_comp {c d : free_groupoid V} (p : c ⟶ d)  : quot_comp p (quot_inv p) = 𝟙 c :=
 begin
@@ -152,9 +172,11 @@ begin
   dsimp only [quot_comp, quot_inv],
   simp only [quot.lift_on_mk], 
   apply quot.eqv_gen_sound,
-  induction pp with _ two thr fou fiv six sev eig nin ten,
+  induction pp with _ c d e f w ih eig nin ten,
   { exact eqv_gen.refl _, },
-  { apply eqv_gen.trans ((word.cons_p fiv six) ≫* (word.cons_p fiv six).reverse) (six ≫* six.reverse) (word.nil), },
+  { sorry, --refine eqv_gen.trans _ _ _ _ _,
+     },
+  sorry,
 end
 
 lemma quot_comp_inv {c d : free_groupoid V} (p : c ⟶ d)  : (quot_inv p) ≫ p = 𝟙 d :=
@@ -167,18 +189,21 @@ begin
   sorry,
 end
 
-@[simp]
-lemma quot_cons_p { c d e : V} (f : c ⟶ d) (w : word d e) : 
-  quot.mk red_step (word.cons_p f w) = (quot.mk red_step +[ f ] : (c : free_groupoid V) ⟶ (d : free_groupoid V)) ≫ (quot.mk red_step w : free_groupoid V):= sorry
-@[simp]
-lemma quot_cons_n { c d e : V} (f : d ⟶ c) (w : word d e) : 
-  quot.mk red_step (word.cons_n f w) = (quot.mk red_step $ letter_n f) ≫ (quot.mk red_step w) := sorry
-
 instance : groupoid (free_groupoid V) :=
 { to_category := free.free_groupoid_category
 , inv := λ a b p, quot_inv p
 , inv_comp' := λ a b p, (quot_comp_inv p)
 , comp_inv' := λ a b p, quot_inv_comp p }
+
+@[simp]
+lemma quot_cons_p {c d e : V} (f : c ⟶ d) (w : word d e) : 
+  (quot.mk (@red_step V _ c e) (word.cons_p f w)) = 
+  quot_comp (quot.mk (@red_step V _ c d) (letter_p f )) (quot.mk (@red_step V _ d e) w) := rfl
+
+@[simp]
+lemma quot_cons_n {c d e : V} (f : d ⟶ c) (w : word d e) : 
+  (quot.mk (@red_step V _ c e) (word.cons_n f w)) = 
+  quot_comp (quot.mk (@red_step V _ c d) (letter_n f )) (quot.mk (@red_step V _ d e) w) := rfl
 
 def ι : prefunctor V (free_groupoid V) := 
 { obj := λ x, x 
@@ -191,24 +216,22 @@ def lift_word {V' : Type u'} [G' : groupoid V']
 | x z (@word.cons_n _ _ _ y _ p w) := (G'.inv $ φ.map p) ≫ (lift_word w)
 
 @[simp]
-lemma lift_word_append {V' : Type u'} [G' : groupoid V']
-  (φ : prefunctor V V') : Π {x y z : V} (u : word x y) (w : word y z),
-   lift_word φ (u ≫* w) = (lift_word φ u) ≫ (lift_word φ w) := sorry
-
-@[simp]
-lemma lift_word_reverse {V' : Type u'} [G' : groupoid V']
-  (φ : prefunctor V V') : Π {x y : V} (u : word x y) ,
-   lift_word φ (u.reverse) = G'.inv (lift_word φ u) := sorry
-
-@[simp]
 lemma lift_word_nil {V' : Type u'} [G' : groupoid V']
   (φ : prefunctor V V') : Π (x : V),  (lift_word φ (word.nil : word x x)) = 𝟙 (φ.obj x) :=
 by { rintro x, dsimp only [lift_word], refl, }
 
+@[simp]
+lemma lift_word_cons_p {V' : Type u'} [G' : groupoid V']
+  (φ : prefunctor V V') {x y z : V} (f : x ⟶ y) (w : word y z): (lift_word φ $ word.cons_p f w) = (φ.map f) ≫ (lift_word φ w) := rfl
+
+@[simp]
+lemma lift_word_cons_n {V' : Type u'} [G' : groupoid V']
+  (φ : prefunctor V V') {x y z : V} (f : y ⟶ x) (w : word y z): (lift_word φ $ word.cons_n f w) = (inv $ φ.map f) ≫ (lift_word φ w) := rfl
+
 
 @[simp]
 lemma lift_word_letter_p {V' : Type u'} [G' : groupoid V']
-  (φ : prefunctor V V') : Π (x y : V) (u : x ⟶ y),  (lift_word φ (letter_p u : word x y)) = φ.map u :=
+  (φ : prefunctor V V') : Π (x y : V) (u : x ⟶ y),  (lift_word φ ( letter_p u : word x y)) = φ.map u :=
 by { rintro x y p, dsimp [lift_word, letter_p, lift_word_nil], simp, }
 
 @[simp]
@@ -217,10 +240,45 @@ lemma lift_word_letter_n {V' : Type u'} [G' : groupoid V']
 by { rintro x y p, dsimp [lift_word, letter_n, lift_word_nil], simp, }
 
 
+@[simp]
+lemma lift_word_append {V' : Type u'} [G' : groupoid V'] (φ : prefunctor V V') 
+  {x y z : V} (u : word x y) (w : word y z) : lift_word φ (u ≫* w) = (lift_word φ u) ≫ (lift_word φ w) :=
+begin 
+  induction u, 
+  { simp only [word.nil_append, lift_word_nil, category.id_comp], },
+  { simp only [u_ih, word.cons_p_append, lift_word_cons_p, category.assoc], },
+  { simp only [u_ih, word.cons_n_append, lift_word_cons_n, category.assoc], }, 
+end
+
+--mathlib
+@[simp] lemma _root_.category_theory.groupoid.inv_id {V : Type*} [G : groupoid V] (v : V) : G.inv (𝟙 v) = 𝟙 v := sorry
+@[simp] lemma _root_.category_theory.groupoid.inv_comp'' {V : Type*} [G : groupoid V] 
+  {u v w : V} (f : u ⟶ v) (g : v ⟶ w) : G.inv (f ≫ g) = (G.inv g) ≫ (G.inv f) := sorry
+@[simp] lemma _root_.category_theory.groupoid.inv_inv {V : Type*} [G : groupoid V] (u v : V) [f : u ⟶ v] : G.inv (G.inv f) = f := 
+  calc G.inv (G.inv f) = (G.inv (G.inv f)) ≫ (𝟙 v) : by rw category.comp_id
+                  ... = (G.inv (G.inv f)) ≫ (G.inv f ≫ f) : by rw ←groupoid.inv_comp
+                  ... = (G.inv (G.inv f) ≫ G.inv f) ≫ f : by rw ←category.assoc
+                  ... = (𝟙 u) ≫ f : by rw groupoid.inv_comp
+                  ... = f : by rw category.id_comp 
+
+
+
+@[simp]
+lemma lift_word_reverse {V' : Type u'} [G' : groupoid V'] (φ : prefunctor V V')
+  {x y : V} (u : word x y) : lift_word φ (u.reverse) = G'.inv (lift_word φ u) := 
+begin
+  induction u,
+  { simp only [word.reverse_nil, lift_word_nil, inv_id], },
+  { simp only [u_ih, word.reverse_cons_p, lift_word_append, lift_word_letter_n, lift_word_cons_p, inv_comp''], },
+  { simp only [u_ih, word.reverse_cons_n, lift_word_append, lift_word_letter_p, lift_word_cons_n, inv_comp'', inv_inv], },
+end
+
+
 def lift_word_congr {V' : Type u'} [G' : groupoid V']
   (φ : prefunctor V V') : Π {x y : V} (w₀ w₁ : word x y) (redw : red_step w₀ w₁), lift_word φ w₀ = lift_word φ w₁ :=
 begin
   rintros x y w₀ w₁ redw,
+  dsimp [red_step] at redw,
   rcases redw with (⟨u,v,r₀,r₁,p,rfl,rfl⟩|⟨u,v,r₀,r₁,p,rfl,rfl⟩),
   { rw [←word.reverse_letter_p p],
     simp only [word.append_assoc, lift_word_append, lift_word_reverse],
@@ -237,7 +295,7 @@ def lift {V' : Type u'} [G' : groupoid V']
 { obj := φ.obj
 , map := λ x y, quot.lift (λ p, lift_word φ p) (λ p₀ p₁ (redp : red_step p₀ p₁), lift_word_congr φ p₀ p₁ redp)
 , map_id' := λ x, by { dsimp only [lift_word,category_struct.id], refl,  }
-, map_comp' := λ x y z f g, by { refine quot.induction_on₂ f g _, rintro ff gg, dsimp only [lift_word,category_struct.comp,quot_comp],simp only [lift_word_append],  } }
+, map_comp' := λ x y z f g, by { refine quot.induction_on₂ f g _, rintro ff gg, dsimp only [lift_word,category_struct.comp,quot_comp], simp only [lift_word_append], }, }
 
 
 --mathlib (stolen from functor.ext)
@@ -252,7 +310,6 @@ begin
   funext X Y f,
   simpa using h_map X Y f
 end
-
 
 --mathlib (stolen from functor.ext), 
 @[ext] lemma ext {V : Type u} [Q : quiver.{v+1} V] {V' : Type u'} [Q' : quiver.{v'+1} V'] {F G : prefunctor V V'} 
@@ -275,6 +332,8 @@ begin
   { subst_vars, apply lift_word_letter_p, },
 end
 
+
+-- mathlib?
 @[simp]
 lemma _root_.category_theory.functor.groupoid_map_inv  {C D : Type*} [G : groupoid C] [H : groupoid D] (φ : C ⥤ D)
   {c d : C} (f : c ⟶ d) :  
@@ -298,15 +357,18 @@ begin
     refine word.rec _ _ _,
     { rintro x, convert functor.map_id Φ x, },
     { rintro x y z p w IHw, 
-      rw [quot_cons_p, functor.map_comp, IHw],
+      rw [quot_cons_p],
+      have : Φ.map (quot_comp (quot.mk red_step  $ letter_p p ) (quot.mk red_step w)) = Φ.map ((quot.mk red_step  $ letter_p p ) ≫  (quot.mk red_step w)), by refl,
+      simp only [this, functor.map_comp, IHw],
       congr, }, 
     { rintro x y z p w IHw, 
-      rw [quot_cons_n, functor.map_comp, IHw, functor.map_comp], apply congr_arg2,
-      { dsimp [lift,ι], rw lift_word_letter_n, rw ←word.reverse_letter_p, simp only [prefunctor.comp_map], 
-        convert functor.groupoid_map_inv Φ (quot.mk red_step  +[ p ]) , },
-      refl, }, 
-            
-  },
+      rw [quot_cons_n],
+      have : Φ.map (quot_comp (quot.mk red_step  $ letter_n p ) (quot.mk red_step w)) = Φ.map ((quot.mk red_step $ letter_n p ) ≫  (quot.mk red_step w)), by refl,
+      simp only [this, functor.map_comp, IHw, functor.map_comp], 
+      apply congr_arg2,
+      { dsimp [lift,ι], rw ←word.reverse_letter_p,  
+        convert functor.groupoid_map_inv Φ (quot.mk red_step  $ letter_p p ) , },
+      { refl, }, }, },
 
 end
 

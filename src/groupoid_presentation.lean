@@ -618,16 +618,17 @@ def quotient_id  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c
 λ c, ⟨ quot_id' S Sn c, by {dsimp only [quot_id',quot_start,quot_end,quot_v.mk], induction c, simp, simp,}⟩
 
 def quot_id''  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
-
 begin
   refine λ c, c.rec_on _ _, 
   { rintro c, dsimp only [quotient_quiver,quot_start,quot_end,quot_v.mk], 
     use quot.mk (conj S Sn) ⟨c,c,𝟙 c⟩, split, simp only, simp only, },
   { rintros c d ⟨f,fS⟩, 
     simp,
-    have : quot.mk (λ (c d : C), (S.arrws c d).nonempty) c = quot.mk (λ (c d : C), (S.arrws c d).nonempty) d, by 
-    { apply quot.sound, constructor, use fS,},
-    }
+    have : quot.mk (λ (c d : C), (S.arrws c d).nonempty) c 
+         = quot.mk (λ (c d : C), (S.arrws c d).nonempty) d, by 
+    { apply quot.sound, constructor, use fS, },
+    
+    sorry, },
 end
 
 def quotient [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : 
