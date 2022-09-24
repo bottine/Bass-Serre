@@ -277,8 +277,7 @@ begin
     { exact z ≫ (G.inv y.val), }, },
 end
 
---def word'.append : Π {c d e : C}, word' X c d → word' X d e → word' X c e := λ c d e u w, u.comp w
-#print quiver.path.cons
+
 def path.in : Π {c d : C} (p : quiver.path c d) (X : ∀ c d : C, set (G.hom c d)), Prop :=
 begin
   rintro c d p X,
@@ -550,26 +549,29 @@ def quot_v [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) :=
 def quot_v.mk [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) (c : C) : quot_v S Sn:= 
   (quot.mk (λ (c d : C), (S.arrws c d).nonempty) c)
 
+def arr_class [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) (U V : quot_v S Sn) := 
+  {p : Σ (a b : C), a ⟶ b | quot_v.mk S Sn p.1 = U ∧ quot_v.mk S Sn p.2.1 = V} 
 
-def conj  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : 
-  (Σ (a b : C), a ⟶ b) → (Σ (a b : C), a ⟶ b) → Prop := 
+def conj  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) (U V : quot_v S Sn): 
+  Π (p q : arr_class S Sn U V),  Prop := 
 begin
-  rintros ⟨a,b,f⟩ ⟨c,d,g⟩,
+  rintros ⟨⟨a,b,f⟩,aU,bV⟩ ⟨⟨c,d,g⟩,cU,dV⟩,
   exact ∃ (α ∈ S.arrws a c) (β ∈ S.arrws d b), f = α ≫ g ≫ β
 end
 
 @[refl]
-lemma conj.refl [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : ∀ F, conj S Sn F F :=
+lemma conj.refl [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) (U V : quot_v S Sn)  : ∀ F, conj S Sn U V F F :=
 begin
-  rintro ⟨a,b,f⟩,
+  rintro ⟨⟨a,b,f⟩,_,_⟩,
   use [(𝟙 a), Sn.wide a, (𝟙 b), Sn.wide b], 
   simp only [category.comp_id, category.id_comp],
 end
 
 @[symm]
-lemma conj.symm [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : ∀ F G, conj S Sn F G → conj S Sn G F :=
+lemma conj.symm [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S)  (U V : quot_v S Sn) : 
+  ∀ F G, conj S Sn U V F G → conj S Sn U V G F :=
 begin
-  rintros ⟨a,b,f⟩ ⟨c,d,g⟩ ⟨α,hα,β,hβ,rfl⟩,
+  rintros ⟨⟨a,b,f⟩,_,_⟩ ⟨⟨c,d,g⟩,_,_⟩ ⟨α,hα,β,hβ,rfl⟩,
   use [G.inv α, S.inv' hα, G.inv β, S.inv' hβ],
   simp only [category.assoc, comp_inv, category.comp_id], 
   rw ←category.assoc, 
@@ -577,57 +579,31 @@ begin
 end
 
 @[trans]
-lemma conj.trans [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : 
-  ∀ F G H, conj S Sn F G → conj S Sn G H → conj S Sn F H :=
+lemma conj.trans [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S)  (U V : quot_v S Sn): 
+  ∀ F G H, conj S Sn U V F G → conj S Sn U V G H → conj S Sn U V F H :=
 begin
-  rintros ⟨a₀,b₀,f₀⟩ ⟨a₁,b₁,f₁⟩ ⟨a₂,b₂,f₂⟩ ⟨α₀,hα₀,β₀,hβ₀,rfl⟩  ⟨α₁,hα₁,β₁,hβ₁,rfl⟩,
+  rintros ⟨⟨a₀,b₀,f₀⟩,_,_⟩ ⟨⟨a₁,b₁,f₁⟩,_,_⟩ ⟨⟨a₂,b₂,f₂⟩,_,_⟩ ⟨α₀,hα₀,β₀,hβ₀,rfl⟩  ⟨α₁,hα₁,β₁,hβ₁,rfl⟩,
   use [α₀ ≫ α₁, S.mul' hα₀ hα₁, β₁ ≫ β₀, S.mul' hβ₁ hβ₀],
   simp only [category.assoc],
 end
 
-def quot_start [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : (quot $ conj S Sn) → (quot_v S Sn) :=
-begin
-  refine quot.lift _ _,
-  { rintro ⟨a,b,f⟩, apply quot_v.mk, exact a,},
-  { rintro ⟨a₀,b₀,f₀⟩ ⟨a₁,b₁,f₁⟩ ⟨α,hα,β,hβ,rfl⟩,simp,dsimp [quot_v.mk], apply quot.sound, exact ⟨α,hα⟩,}
-end
-
-def quot_end [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : (quot $ conj S Sn) → (quot_v S Sn) :=
-begin
-  refine quot.lift _ _,
-  { rintro ⟨a,b,f⟩, apply quot_v.mk, exact b,},
-  { rintro ⟨a₀,b₀,f₀⟩ ⟨a₁,b₁,f₁⟩ ⟨α,hα,β,hβ,rfl⟩,simp,dsimp [quot_v.mk], apply quot.sound, exact ⟨G.inv β,S.inv' hβ⟩,}
-end
-
 @[instance]
 def quotient_quiver [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : 
-  quiver (quot_v S Sn) := ⟨λc d, { F | quot_start S Sn F = c ∧ quot_end S Sn F = d }⟩
+  quiver (quot_v S Sn) := ⟨λc d, quot (conj S Sn c d)⟩
 
-def quot_id'  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  (quot $ conj S Sn) :=
-begin
-  apply quot.lift, rotate,
-  { rintro c, 
-    exact quot.mk (conj S Sn) ⟨c,c,𝟙 c⟩ },
-  { rintros c d ⟨f,fS⟩, 
-    apply quot.sound, 
-    use [f,fS,G.inv f, S.inv' fS],
-    simp only [category.id_comp, comp_inv], }
-end
-
-def quotient_id  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
-λ c, ⟨ quot_id' S Sn c, by {dsimp only [quot_id',quot_start,quot_end,quot_v.mk], induction c, simp, simp,}⟩
-
-def quot_id''  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
+def quot_id  [G : groupoid C] (S : subgroupoid G) (Sn : is_normal S) : Π (c : quot_v S Sn),  c ⟶ c :=
 begin
   refine λ c, c.rec_on _ _, 
-  { rintro c, dsimp only [quotient_quiver,quot_start,quot_end,quot_v.mk], 
-    use quot.mk (conj S Sn) ⟨c,c,𝟙 c⟩, split, simp only, simp only, },
+  { rintro c, 
+    apply quot.mk,
+    use ⟨c,c,𝟙 c⟩,
+    dsimp [arr_class,quot_v.mk],simp, }, 
   { rintros c d ⟨f,fS⟩, 
     simp,
     have : quot.mk (λ (c d : C), (S.arrws c d).nonempty) c 
          = quot.mk (λ (c d : C), (S.arrws c d).nonempty) d, by 
     { apply quot.sound, constructor, use fS, },
-    
+    suggest,
     sorry, },
 end
 

@@ -1,10 +1,10 @@
-import category_theory.quotient
+import category_theory.category.basic
+import category_theory.functor.basic
 import category_theory.groupoid
-import group_theory.subgroup.basic
+import group_theory.subgroup.basic -- without this import I get strange errors
 
 
-open set
-open classical function relation
+open set classical function relation
 local attribute [instance] prop_decidable
 
 
@@ -36,7 +36,6 @@ def word.append  : Π {c d e : V}, word c d → word d e → word c e
 | _ _ _ (word.nil) w := w
 | _ _ _ (word.cons_p p u) w := word.cons_p p (u.append w)
 | _ _ _ (word.cons_n p u) w := word.cons_n p (u.append w)
-
 
 @[simp] lemma word.nil_append {c d : V} {p : word c d} : word.nil.append p = p := rfl
 
@@ -75,20 +74,21 @@ def word.reverse : Π {c d : V}, word c d → word d c
   (word.cons_n p w).reverse =  w.reverse.append (letter_p p) := rfl
 
 @[simp] lemma word.reverse_append {c d e : V} (u : word c d) (w : word d e) : 
-  (u.append w).reverse =  w.reverse.append (u.reverse) := by 
-{ induction u, 
+  (u.append w).reverse =  w.reverse.append (u.reverse) :=
+begin
+  induction u, 
   { simp only [word.nil_append, word.reverse_nil, word.append_nil], },
-  { unfold word.append, -- should that be made into a lemma word.cons_p_append ?
-    simp only [u_ih, word.reverse_cons_p, word.append_assoc], },
-  { unfold word.append,
-    simp only [u_ih, word.reverse_cons_n, word.append_assoc], }, }
+  { simp only [word.cons_p_append, u_ih, word.reverse_cons_p, word.append_assoc], },
+  { simp only [word.cons_n_append, u_ih, word.reverse_cons_n, word.append_assoc], },
+end
 
-
-@[simp] lemma word.reverse_reverse  {c d : V} (w : word c d) : w.reverse.reverse = w := by
-{ induction w, 
+@[simp] lemma word.reverse_reverse  {c d : V} (w : word c d) : w.reverse.reverse = w :=
+begin
+  induction w, 
   { dsimp only [word.reverse], refl, },
   { simp only [w_ih, word.reverse_cons_p, word.reverse_append, word.reverse_letter_n], refl, },
-  { simp only [w_ih, word.reverse_cons_n, word.reverse_append, word.reverse_letter_p], refl, }, }
+  { simp only [w_ih, word.reverse_cons_n, word.reverse_append, word.reverse_letter_p], refl, }, 
+end
  
 def red_step {c  d : V} (p : word c d) (q : word c d) : Prop :=
   (∃ (a b : V) (q₀ : word c a) (q₁ : word a d) (f : a ⟶ b), p = q₀ ≫*  (letter_p f) ≫* (letter_n f) ≫* q₁ ∧ q = q₀ ≫* q₁)
@@ -206,11 +206,12 @@ begin
   apply quot_comp_inv,
 end
 
+/-- The free groupoid instance on `free_groupoid V`. -/
 instance : groupoid (free_groupoid V) :=
 { to_category := free.free_groupoid_category
-, inv := λ a b p, quot_inv p
-, inv_comp' := λ a b p, (quot_comp_inv p)
-, comp_inv' := λ a b p, quot_inv_comp p }
+, inv := λ a b, quot_inv
+, inv_comp' := λ a b, quot_comp_inv
+, comp_inv' := λ a b, quot_inv_comp }
 
 @[simp]
 lemma quot_cons_p {c d e : V} (f : c ⟶ d) (w : word d e) : 
@@ -313,7 +314,6 @@ def lift {V' : Type u'} [G' : groupoid V']
 , map := λ x y, quot.lift (λ p, lift_word φ p) (λ p₀ p₁ (redp : red_step p₀ p₁), lift_word_congr φ p₀ p₁ redp)
 , map_id' := λ x, by { dsimp only [lift_word,category_struct.id], refl,  }
 , map_comp' := λ x y z f g, by { refine quot.induction_on₂ f g _, rintro ff gg, dsimp only [lift_word,category_struct.comp,quot_comp], simp only [lift_word_append], }, }
-
 
 --mathlib (stolen from functor.ext)
 lemma _root_.category_theory.functor.ext' {C D : Type*} [category C] [category D] {F G : C ⥤ D} 
